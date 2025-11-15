@@ -27,7 +27,7 @@ class HybridSearchServiceTest {
     private lateinit var documentRepository: DocumentRepository
 
     @Mock
-    private lateinit var embeddingService: OpenAIEmbeddingService
+    private lateinit var embeddingService: OpenAIService
 
     @InjectMocks
     private lateinit var hybridSearchService: HybridSearchService

@@ -17,6 +17,7 @@ spring:
 openai:
   api-key: ${OPENAI_API_KEY}
   embedding-model: text-embedding-3-small
+  summarization-model: gpt-4o-mini
 
 springdoc:
   api-docs:

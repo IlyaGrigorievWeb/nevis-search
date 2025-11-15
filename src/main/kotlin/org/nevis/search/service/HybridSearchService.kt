@@ -8,28 +8,37 @@ import org.nevis.search.repository.ClientRepository
 import org.nevis.search.repository.DocumentRepository
 import org.springframework.stereotype.Service
 import java.util.UUID
+import kotlin.text.take
 
 @Service
 class HybridSearchService(
     private val clientRepository: ClientRepository,
     private val documentRepository: DocumentRepository,
-    private val embeddingService: OpenAIEmbeddingService
+    private val embeddingService: OpenAIService
 ) {
     companion object {
         const val FILTERING_SCORE = 0.3;  //TODO move to config
     }
-
-    fun search(request: SearchRequest): List<BasesSearchResultItem> {
+    fun search(request: SearchRequest, summarizeLargeContent: Boolean = false): List<BasesSearchResultItem> {
         val results = mutableListOf<BasesSearchResultItem>()
 
         // Entity-specific search strategies
-        //TODO maybe add strategy pattern and cre wrappers for custom behaviour of search
+        //TODO maybe add strategy pattern and create wrappers for custom behaviour of search
+        //TODO Idea: sort by score + createdAt -> relevant + recent
 
         //Clients
         results.addAll(searchClients(request.query, request.limit))
 
         //Documents
-        results.addAll(searchDocuments(request.query, request.limit))
+        //TODO sync call of embeddingService.summarizeText use coroutine and do it in parallel
+        //TODO Need to summarizeText for all documents for every search??? Maybe move it to separate http method?
+        //TODO OR do it only after FILTERING_SCORE. Cause currently spent tokens useless
+        val documents =
+        if (summarizeLargeContent)
+             searchDocuments(request.query, request.limit) { content -> embeddingService.summarizeText(content) }
+        else searchDocuments(request.query, request.limit) { content -> content.take(200) + if (content.length > 200) "..." else "" }
+
+        results.addAll(documents)
 
         //Collect most relevant
         return results
@@ -66,12 +75,15 @@ class HybridSearchService(
      * Best for: conceptual queries, synonyms, context understanding
      * Example: "address proof" finds documents mentioning "utility bill"
      */
-    private fun searchDocuments(query: String, limit: Int): List<DocumentResult> {
+    private fun searchDocuments(query: String, limit: Int, contentOptimizationStrategy: (input: String) -> String): List<DocumentResult> {
         val queryEmbedding = embeddingService.generateEmbedding(query)
         val embeddingString = "[${queryEmbedding.joinToString(",")}]"
 
         return documentRepository.findByVectorSimilarity(embeddingString, limit)
-            .map { parseDocumentVectorResult(it) }
+            .map {
+                val entity = parseDocumentVectorResult(it)
+                return@map entity.copy(content = contentOptimizationStrategy(entity.content))
+            }
     }
 
     private fun parseClientTrigramResult(row: Array<Any>): ClientResult {
@@ -113,7 +125,7 @@ class HybridSearchService(
 
             clientId = UUID.fromString(row[1].toString()),
             title = row[2].toString(),
-            content = content.take(200) + if (content.length > 200) "..." else ""
+            content = content
         )
     }
 

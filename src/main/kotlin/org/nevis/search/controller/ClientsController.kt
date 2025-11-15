@@ -117,15 +117,14 @@ class ClientsController(
             var newDocument = Document(
                 title = request.title,
                 content = request.content,
-                client_id = UUID.fromString(id)
+                clientId = UUID.fromString(id)
             )
             indexingService.indexDocument(newDocument)
             val response = DocumentResponse(
                 id = newDocument.id.toString(),
-                client_id = newDocument.client_id.toString(),
+                clientId = newDocument.clientId.toString(),
                 title = newDocument.title,
-                content = newDocument.content,
-                created_at = newDocument.createdAt
+                content = newDocument.content
             )
             ResponseEntity.status(HttpStatus.CREATED).body(response)
         } catch (e: Exception) {
