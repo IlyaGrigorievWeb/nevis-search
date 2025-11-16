@@ -1,6 +1,9 @@
 package org.nevis.search.domain.entities
 
 import jakarta.persistence.*
+import org.hibernate.annotations.Array
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -20,7 +23,8 @@ data class Document(
     //Meta data
 
     @Column(columnDefinition = "vector(1536)")
-    @Transient
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    @Array(length = 1536)
     val embedding: FloatArray? = null,
 
     @Column(name = "created_at")
