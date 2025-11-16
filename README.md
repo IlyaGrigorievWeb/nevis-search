@@ -21,32 +21,26 @@ A hybrid search application built with Spring Boot and Kotlin that provides inte
 
    Before starting the application, you need to set your OpenAI API key in the `docker-compose.yml` file:
 
-   Open `docker-compose.yml` and set the `OPENAI_API_KEY` environment variable:
+   Open `docker-compose.yml` and replace the `${OPENAI_API_KEY}` or set environment variable:
    ```yaml
    environment:
      OPENAI_API_KEY: ${OPENAI_API_KEY}
    ```
 
-   Then set the environment variable in your shell:
+3. **Change database connection settings (optional)**:
 
-   **On Windows (PowerShell)**:
-   ```powershell
-   $env:OPENAI_API_KEY="your-openai-api-key-here"
+   Note: By default, docker-compose contains development values for an empty containerized database. For testing with
+   prefilled data, use secure credentials.
+    
+   In the `docker-compose.yml` file, you can configure the following environment variables for the Spring Boot
+   application:
+   ```yaml
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/searchdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
    ```
 
-   **On Linux/Mac**:
-   ```bash
-   export OPENAI_API_KEY="your-openai-api-key-here"
-   ```
-
-   Alternatively, you can create a `.env` file in the project root:
-   ```
-   OPENAI_API_KEY=your-openai-api-key-here
-   ```
-
-   And Docker Compose will automatically load it.
-
-3. **Start the application**:
+4. **Start the application**:
    ```bash
    docker-compose up --build
    ```
@@ -57,10 +51,85 @@ A hybrid search application built with Spring Boot and Kotlin that provides inte
     - Initialize the database schema from `database-schema.sql`
     - Start the application on port 8080
 
-4. **Verify the application is running**:
+5. **Verify the application is running**:
     - API: http://localhost:8080
     - Swagger UI: http://localhost:8080/swagger-ui.html
     - API Docs: http://localhost:8080/api-docs
+
+### Example Search Queries and Responses
+
+This section demonstrates the hybrid search capabilities with real examples showing how the system handles different types of queries across clients and documents.
+
+#### Example 1: Fuzzy Client Matching
+
+**Query:** `Fast Logistic`
+
+This query demonstrates the trigram-based fuzzy matching for client searches. The system finds clients even when the query contains typos or partial matches.
+
+**Request:**
+```http
+GET /search?q=Fast%20Logistic
+```
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "type": "client",
+      "score": 0.21052631735801697,
+      "data": {
+        "id": 1,
+        "firstName": "Elena",
+        "lastName": "Smith",
+        "email": "elenas.support@fastlogicstics.io"
+      }
+    }
+  ]
+}
+```
+
+**Explanation:** The system matched the query "Fast Logistic" to a client with email "elenas.support@fastlogicstics.io" using trigram similarity. This showcases how the hybrid search handles:
+- Partial company name matching in email addresses
+- Typos and variations (e.g., "Fast Logistic" vs "fastlogicstics")
+- Email domain similarity detection
+
+---
+
+#### Example 2: Semantic Document Search
+
+**Query:** `Moving to new space`
+
+This query demonstrates semantic/vector search capabilities for documents. The system finds conceptually related documents even when they don't contain the exact query terms.
+
+**Request:**
+```http
+GET /search?q=Moving%20to%20new%20space
+```
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "type": "document",
+      "score": 0.37431060961611656,
+      "data": {
+        "id": 5,
+        "title": "Commercial Offer",
+        "content": "FastLogistics proposes a full-service transportation package for relocating office equipment belonging to the client, Orion DataWorks LLC, from their current address at 1440 Ridgehaven Park, Suite 220..."
+      }
+    }
+  ]
+}
+```
+
+**Explanation:** The document was matched semantically using vector embeddings. Notice that:
+- The document content doesn't contain the exact phrase "Moving to new space"
+- The system understood the conceptual relationship between "moving" and "relocating office equipment"
+- The vector embedding captures semantic similarity, allowing for synonym and context-based matching
+
+
 
 ### Database Schema
 
@@ -91,8 +160,6 @@ The schema includes:
 #### Reindexing
 - **POST** `/reindex/clients` - Reindex all clients
 - **POST** `/reindex/documents` - Reindex all documents (regenerates embeddings)
-
-### Example search queries and responses
 
 
 ### Development
