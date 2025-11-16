@@ -2,6 +2,138 @@
 
 A hybrid search application built with Spring Boot and Kotlin that provides intelligent search capabilities across multiple entity types using different search strategies optimized for each entity.
 
+## Running the Application
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- OpenAI API key
+
+### Setup Instructions
+
+1. **Clone the repository** (if not already done):
+   ```bash
+   git clone <repository-url>
+   cd NevisSearch
+   ```
+
+2. **Set OpenAI API Key**:
+
+   Before starting the application, you need to set your OpenAI API key in the `docker-compose.yml` file:
+
+   Open `docker-compose.yml` and set the `OPENAI_API_KEY` environment variable:
+   ```yaml
+   environment:
+     OPENAI_API_KEY: ${OPENAI_API_KEY}
+   ```
+
+   Then set the environment variable in your shell:
+
+   **On Windows (PowerShell)**:
+   ```powershell
+   $env:OPENAI_API_KEY="your-openai-api-key-here"
+   ```
+
+   **On Linux/Mac**:
+   ```bash
+   export OPENAI_API_KEY="your-openai-api-key-here"
+   ```
+
+   Alternatively, you can create a `.env` file in the project root:
+   ```
+   OPENAI_API_KEY=your-openai-api-key-here
+   ```
+
+   And Docker Compose will automatically load it.
+
+3. **Start the application**:
+   ```bash
+   docker-compose up --build
+   ```
+
+   This will:
+    - Build the Spring Boot application
+    - Start PostgreSQL with pgvector and pg_trgm extensions
+    - Initialize the database schema from `database-schema.sql`
+    - Start the application on port 8080
+
+4. **Verify the application is running**:
+    - API: http://localhost:8080
+    - Swagger UI: http://localhost:8080/swagger-ui.html
+    - API Docs: http://localhost:8080/api-docs
+
+### Database Schema
+
+The database schema is automatically initialized when the PostgreSQL container starts. The `database-schema.sql` file is mounted to `/docker-entrypoint-initdb.d/` and executed automatically.
+
+The schema includes:
+- `clients` table with trigram and full-text indexes
+- `documents` table with vector embedding column and IVFFlat index
+- Required PostgreSQL extensions (`vector`, `pg_trgm`)
+
+### API Endpoints
+
+#### Search
+- **GET** `/search?q={query}`
+    - Performs hybrid search across clients and documents
+    - Returns unified, ranked results
+
+#### Clients
+- **GET** `/clients` - List all clients
+- **POST** `/clients` - Create a new client
+- **GET** `/clients/{id}` - Get client by ID
+
+#### Documents
+- **GET** `/documents` - List all documents
+- **POST** `/documents` - Create a new document (automatically generates embedding)
+- **GET** `/documents/{id}` - Get document by ID
+
+#### Reindexing
+- **POST** `/reindex/clients` - Reindex all clients
+- **POST** `/reindex/documents` - Reindex all documents (regenerates embeddings)
+
+### Example search queries and responses
+
+
+### Development
+
+To run the application locally without Docker:
+
+1. **Start PostgreSQL** with pgvector extension:
+   ```bash
+   docker run -d \
+     --name nevissearch-postgres \
+     -e POSTGRES_DB=searchdb \
+     -e POSTGRES_USER=postgres \
+     -e POSTGRES_PASSWORD=postgres \
+     -p 5432:5432 \
+     pgvector/pgvector:pg16
+   ```
+
+2. **Initialize the database schema**:
+   ```bash
+   psql -h localhost -U postgres -d searchdb -f database-schema.sql
+   ```
+
+3. **Set environment variable**:
+   ```bash
+   export OPENAI_API_KEY="your-openai-api-key-here"
+   ```
+
+4. **Run the application**:
+   ```bash
+   ./gradlew bootRun
+   ```
+
+### Configuration
+
+Application configuration is in `src/main/resources/application.yml`:
+- Database connection settings
+- OpenAI API configuration
+- SpringDoc OpenAPI settings
+
+For local development, override settings in `application-local.yml`.
+
 ## Architecture
 
 ### Technology Stack
@@ -111,135 +243,6 @@ The `HybridSearchService` combines results from both entity types:
 2. Filters results by score threshold (0.3)
 3. Sorts all results by score (descending)
 4. Returns top N results based on request limit
-
-## Running the Application
-
-### Prerequisites
-
-- Docker and Docker Compose installed
-- OpenAI API key
-
-### Setup Instructions
-
-1. **Clone the repository** (if not already done):
-   ```bash
-   git clone <repository-url>
-   cd NevisSearch
-   ```
-
-2. **Set OpenAI API Key**:
-   
-   Before starting the application, you need to set your OpenAI API key in the `docker-compose.yml` file:
-   
-   Open `docker-compose.yml` and set the `OPENAI_API_KEY` environment variable:
-   ```yaml
-   environment:
-     OPENAI_API_KEY: ${OPENAI_API_KEY}
-   ```
-   
-   Then set the environment variable in your shell:
-   
-   **On Windows (PowerShell)**:
-   ```powershell
-   $env:OPENAI_API_KEY="your-openai-api-key-here"
-   ```
-   
-   **On Linux/Mac**:
-   ```bash
-   export OPENAI_API_KEY="your-openai-api-key-here"
-   ```
-   
-   Alternatively, you can create a `.env` file in the project root:
-   ```
-   OPENAI_API_KEY=your-openai-api-key-here
-   ```
-   
-   And Docker Compose will automatically load it.
-
-3. **Start the application**:
-   ```bash
-   docker-compose up --build
-   ```
-
-   This will:
-   - Build the Spring Boot application
-   - Start PostgreSQL with pgvector and pg_trgm extensions
-   - Initialize the database schema from `database-schema.sql`
-   - Start the application on port 8080
-
-4. **Verify the application is running**:
-   - API: http://localhost:8080
-   - Swagger UI: http://localhost:8080/swagger-ui.html
-   - API Docs: http://localhost:8080/api-docs
-
-### Database Schema
-
-The database schema is automatically initialized when the PostgreSQL container starts. The `database-schema.sql` file is mounted to `/docker-entrypoint-initdb.d/` and executed automatically.
-
-The schema includes:
-- `clients` table with trigram and full-text indexes
-- `documents` table with vector embedding column and IVFFlat index
-- Required PostgreSQL extensions (`vector`, `pg_trgm`)
-
-### API Endpoints
-
-#### Search
-- **GET** `/search?q={query}`
-  - Performs hybrid search across clients and documents
-  - Returns unified, ranked results
-
-#### Clients
-- **GET** `/clients` - List all clients
-- **POST** `/clients` - Create a new client
-- **GET** `/clients/{id}` - Get client by ID
-
-#### Documents
-- **GET** `/documents` - List all documents
-- **POST** `/documents` - Create a new document (automatically generates embedding)
-- **GET** `/documents/{id}` - Get document by ID
-
-#### Reindexing
-- **POST** `/reindex/clients` - Reindex all clients
-- **POST** `/reindex/documents` - Reindex all documents (regenerates embeddings)
-
-### Development
-
-To run the application locally without Docker:
-
-1. **Start PostgreSQL** with pgvector extension:
-   ```bash
-   docker run -d \
-     --name nevissearch-postgres \
-     -e POSTGRES_DB=searchdb \
-     -e POSTGRES_USER=postgres \
-     -e POSTGRES_PASSWORD=postgres \
-     -p 5432:5432 \
-     pgvector/pgvector:pg16
-   ```
-
-2. **Initialize the database schema**:
-   ```bash
-   psql -h localhost -U postgres -d searchdb -f database-schema.sql
-   ```
-
-3. **Set environment variable**:
-   ```bash
-   export OPENAI_API_KEY="your-openai-api-key-here"
-   ```
-
-4. **Run the application**:
-   ```bash
-   ./gradlew bootRun
-   ```
-
-### Configuration
-
-Application configuration is in `src/main/resources/application.yml`:
-- Database connection settings
-- OpenAI API configuration
-- SpringDoc OpenAPI settings
-
-For local development, override settings in `application-local.yml`.
 
 ## Project Structure
 
