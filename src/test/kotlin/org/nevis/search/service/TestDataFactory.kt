@@ -27,36 +27,37 @@ object TestDataFactory {
     }
 
     /**
-     * Creates a mock fulltext result array as returned by ClientRepository.fullTextSearch
-     * Format: [id, email, firstName, lastName, countryOfResidence, rank]
+     * Creates a mock fulltext result array as returned by DocumentRepository.fullTextSearch
+     * Format: [id, clientId, title, content, summary, rank]
      */
-    fun createFulltextResult(
+    fun createDocumentFulltextResult(
         id: UUID,
-        email: String = "${id.toString().take(8)}@example.com",
-        firstName: String = "Test",
-        lastName: String = "User",
-        country: String = "USA",
+        clientId: UUID,
+        title: String = "Test Document",
+        content: String = "Test content",
+        summary: String = "",
         rank: Double = 1.0
     ): Array<Any> {
         return arrayOf(
             id.toString(),
-            email,
-            firstName,
-            lastName,
-            rank,
-            country
+            clientId.toString(),
+            title,
+            content,
+            summary,
+            rank
         )
     }
 
     /**
      * Creates a mock vector similarity result array as returned by DocumentRepository.findByVectorSimilarity
-     * Format: [id, clientId, title, content, similarity]
+     * Format: [id, clientId, title, content, summary, similarity]
      */
-    fun createDocumentResult(
+    fun createDocumentVectorResult(
         id: UUID,
         clientId: UUID,
         title: String = "Test Document",
         content: String = "Test content",
+        summary: String = "",
         similarity: Double = 0.5
     ): Array<Any> {
         return arrayOf(
@@ -64,6 +65,7 @@ object TestDataFactory {
             clientId.toString(),
             title,
             content,
+            summary,
             similarity
         )
     }
@@ -76,24 +78,24 @@ object TestDataFactory {
     }
 
     /**
-     * Helper to calculate expected merged client score
+     * Helper to calculate expected merged score (vector + fulltext)
      */
-    fun calculateMergedClientScore(
-        trigramScore: Double?,
-        fulltextScore: Double?
+    fun calculateMergedScore(
+        vectorScore: Double?,
+        fulltextRank: Double?
     ): Double {
         return when {
-            trigramScore != null && fulltextScore != null -> {
-                // Both found: trigram * 0.8 + normalized(fulltext) * 0.2
-                (trigramScore * 0.8) + (normalizeFullTextScore(fulltextScore) * 0.2)
+            vectorScore != null && fulltextRank != null -> {
+                // Both found: vector * 0.8 + normalized(fulltext) * 0.2
+                (vectorScore * 0.8) + (normalizeFullTextScore(fulltextRank) * 0.2)
             }
-            trigramScore != null -> {
-                // Only trigram: score * 0.8
-                trigramScore * 0.8
+            vectorScore != null -> {
+                // Only vector: score * 0.8
+                vectorScore * 0.8
             }
-            fulltextScore != null -> {
+            fulltextRank != null -> {
                 // Only fulltext: normalized(score) * 0.5
-                normalizeFullTextScore(fulltextScore) * 0.5
+                normalizeFullTextScore(fulltextRank) * 0.5
             }
             else -> 0.0
         }
@@ -105,11 +107,5 @@ object TestDataFactory {
     private fun normalizeFullTextScore(score: Double): Double {
         return (score / (score + 1.0)).coerceIn(0.0, 1.0)
     }
-
-    // TODO problem with rank scoring in tests cause of filtering by FILTERING_SCORE
-    fun convertScoreToRank(score: Double): Double {
-        return score / (1 - score)
-    }
-    
 }
 

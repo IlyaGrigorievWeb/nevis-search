@@ -48,39 +48,39 @@ class HybridSearchService(
     }
 
     /**
-     * CLIENT SEARCH STRATEGY: Trigram-based fuzzy matching + Full-text
+     * CLIENT SEARCH STRATEGY: Trigram-based fuzzy matching
      * Best for: name variations, typos, company names
      * Example: "nikita insurance" matches "Nikita Petrov @ Alliance Insurance"
      */
     private fun searchClients(query: String, limit: Int): List<ClientResult> {
         // Use trigram similarity for fuzzy name/company matching
-        val trigramResults = clientRepository.findByTrigramSimilarity(query, limit)
+        return clientRepository.findByTrigramSimilarity(query, limit)
             .map { parseClientTrigramResult(it) }
-
-        // Complement with full-text search for exact email/keyword matches
-        //TODO fulltext search useless for client, but can improve document search!
-        val fulltextResults = try {
-            clientRepository.fullTextSearch(query, limit)
-                .map { parseClientFulltextResult(it) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-
-        // Merge results: prioritize trigram (better for names) but boost exact matches
-        return mergeClientResults(trigramResults, fulltextResults)
     }
 
     /**
-     * DOCUMENT SEARCH STRATEGY: Pure vector/semantic search
-     * Best for: conceptual queries, synonyms, context understanding
-     * Example: "address proof" finds documents mentioning "utility bill"
+     * DOCUMENT SEARCH STRATEGY: Vector/semantic search + Full-text
+     * Best for: conceptual queries, synonyms, context understanding + exact keyword matches
+     * Example: "address proof" finds documents mentioning "utility bill" (vector) + exact matches (FTS)
      */
     private fun searchDocuments(query: String, limit: Int): List<DocumentResult> {
         val queryEmbedding = embeddingService.generateEmbedding(query)
         val embeddingString = "[${queryEmbedding.joinToString(",")}]"
 
-        return documentRepository.findByVectorSimilarity(embeddingString, limit)
+        // Use vector similarity for semantic/conceptual matching
+        val vectorResults = documentRepository.findByVectorSimilarity(embeddingString, limit)
             .map { parseDocumentVectorResult(it) }
+
+        // Complement with full-text search for exact keyword matches
+        val fulltextResults = try {
+            documentRepository.fullTextSearch(query, limit)
+                .map { parseDocumentFulltextResult(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        // Merge results: prioritize vector (better for semantic search) but boost exact matches
+        return mergeDocumentResults(vectorResults, fulltextResults)
     }
 
     private fun parseClientTrigramResult(row: Array<Any>): ClientResult {
@@ -94,21 +94,6 @@ class HybridSearchService(
             firstName = row[2].toString(),
             lastName = row[3].toString(),
             countryOfResidence = row[4].toString()
-        )
-    }
-
-    private fun parseClientFulltextResult(row: Array<Any>): ClientResult {
-        val id = UUID.fromString(row[0].toString())
-        val rank = (row[4] as Number).toDouble()
-
-        return ClientResult(
-            id = id,
-            score = normalizeFullTextScore(rank),
-
-            email = row[1].toString(),
-            firstName = row[2].toString(),
-            lastName = row[3].toString(),
-            countryOfResidence = row[5].toString()
         )
     }
 
@@ -127,19 +112,34 @@ class HybridSearchService(
         )
     }
 
-    /**
-     * Merge client results with strategy:
-     * - 80% weight to trigram (better for name matching)
-     * - 20% weight to fulltext (catches exact email matches)
-     */
-    private fun mergeClientResults(
-        trigramResults: List<ClientResult>,
-        fulltextResults: List<ClientResult>
-    ): List<ClientResult> {
-        val resultMap = mutableMapOf<UUID, ClientResult>()
+    private fun parseDocumentFulltextResult(row: Array<Any>): DocumentResult {
+        val content = row[3].toString()
+        val summary = row[4] as? String
+        val rank = (row[5] as Number).toDouble()
 
-        // Add trigram results with higher weight (primary strategy)
-        trigramResults.forEach { result ->
+        return DocumentResult(
+            id = UUID.fromString(row[0].toString()),
+            score = normalizeFullTextScore(rank),
+            clientId = UUID.fromString(row[1].toString()),
+            title = row[2].toString(),
+            content = content.take(200) + if (content.length > 200) "..." else "",
+            summary = summary
+        )
+    }
+
+    /**
+     * Merge document results with strategy:
+     * - 80% weight to vector (better for semantic/conceptual search)
+     * - 20% weight to fulltext (catches exact keyword matches)
+     */
+    private fun mergeDocumentResults(
+        vectorResults: List<DocumentResult>,
+        fulltextResults: List<DocumentResult>
+    ): List<DocumentResult> {
+        val resultMap = mutableMapOf<UUID, DocumentResult>()
+
+        // Add vector results with higher weight (primary strategy)
+        vectorResults.forEach { result ->
             resultMap[result.id] = result.copy(score = result.score * 0.8)
         }
 
@@ -147,12 +147,12 @@ class HybridSearchService(
         fulltextResults.forEach { result ->
             val existing = resultMap[result.id]
             if (existing != null) {
-                // If already found by trigram, boost the score
+                // If already found by vector, boost the score
                 resultMap[result.id] = existing.copy(
                     score = existing.score + (result.score * 0.2)
                 )
             } else {
-                // Only fulltext match (e.g., exact email match)
+                // Only fulltext match (e.g., exact keyword match)
                 resultMap[result.id] = result.copy(score = result.score * 0.5)
             }
         }
