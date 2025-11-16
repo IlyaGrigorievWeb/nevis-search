@@ -28,5 +28,26 @@ interface DocumentRepository : JpaRepository<Document, UUID> {
         @Param("embedding") embedding: String,
         @Param("limit") limit: Int
     ): List<Array<Any>>
+
+    /**
+     * Full-text search - catches exact keyword matches in title and content
+     */
+    @Query(
+        value = """
+            SELECT id, client_id, title, content, summary,
+                   ts_rank(to_tsvector('english', title || ' ' || content), 
+                          plainto_tsquery('english', :query)) as rank
+            FROM documents
+            WHERE to_tsvector('english', title || ' ' || content) 
+                  @@ plainto_tsquery('english', :query)
+            ORDER BY rank DESC
+            LIMIT :limit
+        """,
+        nativeQuery = true
+    )
+    fun fullTextSearch(
+        @Param("query") query: String,
+        @Param("limit") limit: Int
+    ): List<Array<Any>>
 }
 

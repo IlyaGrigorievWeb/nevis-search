@@ -13,7 +13,8 @@ import org.nevis.search.domain.dto.search.DocumentResult
 import org.nevis.search.domain.dto.search.SearchRequest
 import org.nevis.search.repository.ClientRepository
 import org.nevis.search.repository.DocumentRepository
-import org.nevis.search.service.TestDataFactory.convertScoreToRank
+import org.nevis.search.service.TestDataFactory.createDocumentFulltextResult
+import org.nevis.search.service.TestDataFactory.createDocumentVectorResult
 import java.util.UUID
 
 //Ranking tests
@@ -29,71 +30,87 @@ class HybridSearchServiceTest {
     @Mock
     private lateinit var embeddingService: OpenAIService
 
+    @Mock
+    private lateinit var summarizingService: SummarizingService
+
     @InjectMocks
     private lateinit var hybridSearchService: HybridSearchService
 
     private fun setupMocks(
         trigramResults: List<Array<Any>> = emptyList(),
-        fulltextResults: List<Array<Any>> = emptyList(),
-        documentResults: List<Array<Any>> = emptyList(),
+        documentVectorResults: List<Array<Any>> = emptyList(),
+        documentFulltextResults: List<Array<Any>> = emptyList(),
         embedding: FloatArray = TestDataFactory.createDefaultEmbedding()
     ) {
         whenever(clientRepository.findByTrigramSimilarity(any(), any()))
             .thenReturn(trigramResults)
-        whenever(clientRepository.fullTextSearch(any(), any()))
-            .thenReturn(fulltextResults)
         whenever(documentRepository.findByVectorSimilarity(any(), any()))
-            .thenReturn(documentResults)
+            .thenReturn(documentVectorResults)
+        whenever(documentRepository.fullTextSearch(any(), any()))
+            .thenReturn(documentFulltextResults)
         whenever(embeddingService.generateEmbedding(any()))
             .thenReturn(embedding)
     }
 
     @Test
-    fun `test search merges client results by score correctly`() {
+    fun `test search merges document results by score correctly`() {
         // Given
-        val clientId1 = UUID.randomUUID()
-        val clientId2 = UUID.randomUUID()
-        val clientId3 = UUID.randomUUID()
+        val clientId = UUID.randomUUID()
+        val documentId1 = UUID.randomUUID()
+        val documentId2 = UUID.randomUUID()
+        val documentId3 = UUID.randomUUID()
 
-        val trigramResult1 = TestDataFactory.createTrigramResult(
-            clientId1, "john.doe@example.com", "John", "Doe", "USA", 0.85
+        val vectorDoc1 = createDocumentVectorResult(
+            documentId1, clientId, "Doc 1", "Content 1", similarity = 0.85
         )
-        val fulltextResult1 = TestDataFactory.createFulltextResult(
-            clientId1, "john.doe@example.com", "John", "Doe", "USA", 0.75
+        val fulltextDoc1 = createDocumentFulltextResult(
+            documentId1, clientId, "Doc 1", "Content 1", rank = 0.75
         )
-        val trigramResult2 = TestDataFactory.createTrigramResult(
-            clientId2, "jane.smith@example.com", "Jane", "Smith", "UK", 0.70
+        val vectorDoc2 = createDocumentVectorResult(
+            documentId2, clientId, "Doc 2", "Content 2", similarity = 0.70
         )
-        val fulltextResult3 = TestDataFactory.createFulltextResult(
-            clientId3, "johnny.walker@example.com", "Johnny", "Walker", "Canada", 0.65
+        val fulltextDoc3 = createDocumentFulltextResult(
+            documentId3, clientId, "Doc 3", "Content 3", rank = 0.65
         )
 
         setupMocks(
-            trigramResults = listOf(trigramResult1, trigramResult2),
-            fulltextResults = listOf(fulltextResult1, fulltextResult3)
+            trigramResults = emptyList(),
+            documentVectorResults = listOf(vectorDoc1, vectorDoc2),
+            documentFulltextResults = listOf(fulltextDoc1, fulltextDoc3)
         )
 
         // When
-        val results = hybridSearchService.search(SearchRequest("john doe", 10))
+        val results = hybridSearchService.search(SearchRequest("document query", 10))
 
         // Then
         assertEquals(3, results.size)
+        val documents = results.filterIsInstance<DocumentResult>()
+        assertEquals(3, documents.size)
 
-        val client1 = results.find { it.id == clientId1 } as ClientResult
-        assertEquals("john.doe@example.com", client1.email)
-        assertEquals(TestDataFactory.calculateMergedClientScore(0.85, 0.75), client1.score, 0.001)
+        val doc1 = documents.find { it.id == documentId1 }!!
+        assertEquals(
+            TestDataFactory.calculateMergedScore(0.85, 0.75),
+            doc1.score,
+            0.001
+        )
 
-        val client2 = results.find { it.id == clientId2 } as ClientResult
-        assertEquals("jane.smith@example.com", client2.email)
-        assertEquals(TestDataFactory.calculateMergedClientScore(0.70, null), client2.score, 0.001)
+        val doc2 = documents.find { it.id == documentId2 }!!
+        assertEquals(
+            TestDataFactory.calculateMergedScore(0.70, null),
+            doc2.score,
+            0.001
+        )
 
-        val client3 = results.find { it.id == clientId3 } as ClientResult
-        assertEquals("johnny.walker@example.com", client3.email)
-        assertEquals(TestDataFactory.calculateMergedClientScore(null, 0.65), client3.score, 0.001)
+        val doc3 = documents.find { it.id == documentId3 }!!
+        assertEquals(
+            TestDataFactory.calculateMergedScore(null, 0.65),
+            doc3.score,
+            0.001
+        )
     }
 
     @Test
-    fun `test search filters results by score threshold`() {
+    fun `test search returns all trigram client results`() {
         // Given
         val clientId1 = UUID.randomUUID()
         val clientId2 = UUID.randomUUID()
@@ -115,11 +132,10 @@ class HybridSearchServiceTest {
         val results = hybridSearchService.search(SearchRequest("test query", 10))
 
         // Then
-        assertEquals(2, results.size)
+        assertEquals(3, results.size)
         assertTrue(results.any { it.id == clientId1 })
+        assertTrue(results.any { it.id == clientId2 })
         assertTrue(results.any { it.id == clientId3 })
-        assertFalse(results.any { it.id == clientId2 })
-        results.forEach { assertTrue(it.score > 0.3) }
     }
 
     @Test
@@ -182,16 +198,16 @@ class HybridSearchServiceTest {
         val clientResult = TestDataFactory.createTrigramResult(
             clientId, "client@example.com", "Test", "Client", "USA", 0.80
         )
-        val doc1 = TestDataFactory.createDocumentResult(
-            documentId1, clientId, "Test Document 1", "This is test content for document 1", 0.75
+        val doc1 = createDocumentVectorResult(
+            documentId1, clientId, "Test Document 1", "This is test content for document 1", "", 0.75
         )
-        val doc2 = TestDataFactory.createDocumentResult(
-            documentId2, clientId, "Test Document 2", "This is test content for document 2", 0.50
+        val doc2 = createDocumentVectorResult(
+            documentId2, clientId, "Test Document 2", "This is test content for document 2", "" , 0.50
         )
 
         setupMocks(
             trigramResults = listOf(clientResult),
-            documentResults = listOf(doc1, doc2)
+            documentVectorResults = listOf(doc1, doc2)
         )
 
         // When
@@ -205,25 +221,29 @@ class HybridSearchServiceTest {
         assertEquals(1, clients.size)
         assertEquals(2, documents.size)
         assertEquals(clientId, clients[0].id)
-        assertEquals(0.80 * 0.8, clients[0].score, 0.001)
-        assertEquals(0.75, documents.find { it.id == documentId1 }!!.score, 0.001)
-        assertEquals(0.50, documents.find { it.id == documentId2 }!!.score, 0.001)
+        assertEquals(0.80, clients[0].score, 0.001)
+        assertEquals(0.75 * 0.8, documents.find { it.id == documentId1 }!!.score, 0.001)
+        assertEquals(0.50 * 0.8, documents.find { it.id == documentId2 }!!.score, 0.001)
     }
 
     @Test
-    fun `test search handles fulltext search exception gracefully`() {
+    fun `test search handles document fulltext search exception gracefully`() {
         // Given
         val clientId = UUID.randomUUID()
+        val documentId = UUID.randomUUID()
         val trigramResult = TestDataFactory.createTrigramResult(
             clientId, "client@example.com", "Test", "Client", "USA", 0.80
+        )
+        val docVector = createDocumentVectorResult(
+            documentId, clientId, "Doc", "Content", similarity = 0.9
         )
 
         whenever(clientRepository.findByTrigramSimilarity(any(), any()))
             .thenReturn(listOf(trigramResult))
-        whenever(clientRepository.fullTextSearch(any(), any()))
-            .thenThrow(RuntimeException("Fulltext search failed"))
         whenever(documentRepository.findByVectorSimilarity(any(), any()))
-            .thenReturn(emptyList())
+            .thenReturn(listOf(docVector))
+        whenever(documentRepository.fullTextSearch(any(), any()))
+            .thenThrow(RuntimeException("Fulltext search failed"))
         whenever(embeddingService.generateEmbedding(any()))
             .thenReturn(TestDataFactory.createDefaultEmbedding())
 
@@ -231,34 +251,9 @@ class HybridSearchServiceTest {
         val results = hybridSearchService.search(SearchRequest("test query", 10))
 
         // Then
-        assertEquals(1, results.size)
-        assertEquals(clientId, results[0].id)
-    }
-
-    @Test
-    fun `test search correctly merges overlapping client results with different scores`() {
-        // Given
-        val clientId = UUID.randomUUID()
-        val trigramResult = TestDataFactory.createTrigramResult(
-            clientId, "john.doe@example.com", "John", "Doe", "USA", 0.60
-        )
-        val fulltextResult = TestDataFactory.createFulltextResult(
-            clientId, "john.doe@example.com", "John", "Doe", "USA", 0.80
-        )
-
-        setupMocks(
-            trigramResults = listOf(trigramResult),
-            fulltextResults = listOf(fulltextResult)
-        )
-
-        // When
-        val results = hybridSearchService.search(SearchRequest("john", 10))
-
-        // Then
-        assertEquals(1, results.size)
-        val result = results[0] as ClientResult
-        assertEquals(clientId, result.id)
-        assertEquals(TestDataFactory.calculateMergedClientScore(0.60, 0.80), result.score, 0.001)
+        assertEquals(2, results.size)
+        assertTrue(results.any { it.id == clientId })
+        assertTrue(results.any { it.id == documentId })
     }
 }
 

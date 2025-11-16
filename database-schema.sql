@@ -12,10 +12,6 @@ CREATE TABLE clients (
     country_of_residence VARCHAR(255)
 );
 
--- Full-text search indexes
-CREATE INDEX clients_search_idx ON clients
-    USING gin (to_tsvector('english', first_name || ' ' || last_name || ' ' || email));
-
 -- Trigram indexes for fuzzy matching
 CREATE INDEX clients_first_name_trgm_idx ON clients USING gin(first_name gin_trgm_ops);
 CREATE INDEX clients_last_name_trgm_idx ON clients USING gin(last_name gin_trgm_ops);
@@ -48,4 +44,8 @@ DO $$
 
 -- Vector similarity indexes
 CREATE INDEX ON documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Full-text search indexes for documents
+CREATE INDEX documents_search_idx ON documents
+    USING gin (to_tsvector('english', title || ' ' || content));
 
