@@ -17,7 +17,6 @@ class OpenAIService(
     @Value("\${openai.summarization-model:gpt-4o-mini}") private val summarizationModel: String = "gpt-4o-mini"
 ) {
     private val client = OkHttpClient()
-    private val objectMapper = ObjectMapper()
     private val jsonMediaType = "application/json".toMediaType()
     private val json = Json { ignoreUnknownKeys = true }
 

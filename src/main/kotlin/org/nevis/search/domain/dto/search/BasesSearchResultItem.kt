@@ -22,4 +22,5 @@ data class DocumentResult(
     val clientId: UUID,
     val title: String,
     val content: String,
+    val summary: String? = null,
 ) : BasesSearchResultItem

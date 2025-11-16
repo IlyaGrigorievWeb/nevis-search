@@ -15,7 +15,7 @@ interface DocumentRepository : JpaRepository<Document, UUID> {
      */
     @Query(
         value = """
-            SELECT id, client_id, title, content,
+            SELECT id, client_id, title, content, summary,
                    1 - (embedding <=> cast(:embedding as vector)) as similarity
             FROM documents
             WHERE embedding IS NOT NULL

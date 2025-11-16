@@ -20,6 +20,7 @@ data class Document(
     //Meta data
 
     @Column(columnDefinition = "vector(1536)")
+    @Transient
     val embedding: FloatArray? = null,
 
     @Column(name = "created_at")
@@ -27,5 +28,8 @@ data class Document(
 
     @Column(name = "client_id", nullable = false, columnDefinition = "UUID")
     val clientId: UUID? = null,
+
+    @Column(columnDefinition = "TEXT")
+    val summary: String? = null,
 )
 

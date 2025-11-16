@@ -14,12 +14,10 @@ import kotlin.text.take
 class HybridSearchService(
     private val clientRepository: ClientRepository,
     private val documentRepository: DocumentRepository,
-    private val embeddingService: OpenAIService
+    private val embeddingService: OpenAIService,
+    private val summarizingService: SummarizingService
 ) {
-    companion object {
-        const val FILTERING_SCORE = 0.3;  //TODO move to config
-    }
-    fun search(request: SearchRequest, summarizeLargeContent: Boolean = false): List<BasesSearchResultItem> {
+    fun search(request: SearchRequest): List<BasesSearchResultItem> {
         val results = mutableListOf<BasesSearchResultItem>()
 
         // Entity-specific search strategies
@@ -30,19 +28,21 @@ class HybridSearchService(
         results.addAll(searchClients(request.query, request.limit))
 
         //Documents
-        //TODO sync call of embeddingService.summarizeText use coroutine and do it in parallel
-        //TODO Need to summarizeText for all documents for every search??? Maybe move it to separate http method?
-        //TODO OR do it only after FILTERING_SCORE. Cause currently spent tokens useless
-        val documents =
-        if (summarizeLargeContent)
-             searchDocuments(request.query, request.limit) { content -> embeddingService.summarizeText(content) }
-        else searchDocuments(request.query, request.limit) { content -> content.take(200) + if (content.length > 200) "..." else "" }
+        val documents = searchDocuments(request.query, request.limit)
+
+        // Asynchronously generate summaries for documents that don't have one
+        //TODO remove filter, added for less count of queries to OPEN AI
+        documents.filter { it.score > 0.5 }.forEach { documentResult ->
+            if (documentResult.summary == null) {
+                // Launch async summarization without blocking
+                summarizingService.summarizeDocumentAsync(documentResult.id)
+            }
+        }
 
         results.addAll(documents)
 
         //Collect most relevant
         return results
-            .filter { it.score > FILTERING_SCORE }
             .sortedByDescending { it.score }
             .take(request.limit)
     }
@@ -57,8 +57,8 @@ class HybridSearchService(
         val trigramResults = clientRepository.findByTrigramSimilarity(query, limit)
             .map { parseClientTrigramResult(it) }
 
-        //TODO fulltext search is overkill for expected user search
         // Complement with full-text search for exact email/keyword matches
+        //TODO fulltext search useless for client, but can improve document search!
         val fulltextResults = try {
             clientRepository.fullTextSearch(query, limit)
                 .map { parseClientFulltextResult(it) }
@@ -75,15 +75,12 @@ class HybridSearchService(
      * Best for: conceptual queries, synonyms, context understanding
      * Example: "address proof" finds documents mentioning "utility bill"
      */
-    private fun searchDocuments(query: String, limit: Int, contentOptimizationStrategy: (input: String) -> String): List<DocumentResult> {
+    private fun searchDocuments(query: String, limit: Int): List<DocumentResult> {
         val queryEmbedding = embeddingService.generateEmbedding(query)
         val embeddingString = "[${queryEmbedding.joinToString(",")}]"
 
         return documentRepository.findByVectorSimilarity(embeddingString, limit)
-            .map {
-                val entity = parseDocumentVectorResult(it)
-                return@map entity.copy(content = contentOptimizationStrategy(entity.content))
-            }
+            .map { parseDocumentVectorResult(it) }
     }
 
     private fun parseClientTrigramResult(row: Array<Any>): ClientResult {
@@ -117,15 +114,16 @@ class HybridSearchService(
 
     private fun parseDocumentVectorResult(row: Array<Any>): DocumentResult {
         val content = row[3].toString()
-        val rank = (row[4] as Number).toDouble()
+        val summary = row[4] as? String
+        val rank = (row[5] as Number).toDouble()
 
         return DocumentResult(
             id = UUID.fromString(row[0].toString()),
             score = rank,
-
             clientId = UUID.fromString(row[1].toString()),
             title = row[2].toString(),
-            content = content
+            content = content.take(200) + if (content.length > 200) "..." else "",
+            summary = summary
         )
     }
 

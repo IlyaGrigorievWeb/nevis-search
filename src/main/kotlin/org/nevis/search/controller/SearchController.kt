@@ -46,7 +46,6 @@ class SearchController(
     )
     fun search(
         @RequestParam("q") query: String,
-        @RequestParam("generateSummary", required = false, defaultValue = "false") generateSummary: Boolean
     ): ResponseEntity<List<*>> {
         if (query.isBlank()) {
             return ResponseEntity.badRequest().build()
@@ -56,9 +55,8 @@ class SearchController(
             var searchRequest = SearchRequest(
                 query = query,
                 limit = 5,
-                generateSummary = generateSummary
             )
-            val results = searchService.search(searchRequest, searchRequest.generateSummary)
+            val results = searchService.search(searchRequest)
 
             ResponseEntity.ok(results)
         } catch (e: Exception) {

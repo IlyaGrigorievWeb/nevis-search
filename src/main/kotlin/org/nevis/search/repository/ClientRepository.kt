@@ -16,11 +16,11 @@ interface ClientRepository : JpaRepository<Client, UUID> {
         value = """
             SELECT id, email, first_name, last_name, country_of_residence,
                    GREATEST(
-                       similarity(first_name || last_name, :query),
+                       similarity(first_name || last_name || country_of_residence, :query),
                        similarity(email, :query)
                    ) as score
             FROM clients
-            WHERE similarity(first_name || last_name, :query) > 0.3
+            WHERE similarity(first_name || last_name || country_of_residence, :query) > 0.3
                OR similarity(email, :query) > 0.1
             ORDER BY score DESC
             LIMIT :limit
@@ -38,10 +38,10 @@ interface ClientRepository : JpaRepository<Client, UUID> {
     @Query(
         value = """
             SELECT id, email, first_name, last_name, country_of_residence
-                   ts_rank(to_tsvector('english', first_name || ' ' || last_name || ' ' || email), 
+                   ts_rank(to_tsvector('english', first_name || ' ' || last_name || ' ' || country_of_residence), 
                           plainto_tsquery('english', :query)) as rank
             FROM clients
-            WHERE to_tsvector('english', first_name || ' ' || last_name || ' ' || email) 
+            WHERE to_tsvector('english', first_name || ' ' || last_name || ' ' || country_of_residence) 
                   @@ plainto_tsquery('english', :query)
             ORDER BY rank DESC
             LIMIT :limit
