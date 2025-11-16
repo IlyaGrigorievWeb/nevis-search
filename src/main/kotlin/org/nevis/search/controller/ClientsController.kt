@@ -240,7 +240,8 @@ class ClientsController(
                 id = savedDocument.id.toString(),
                 clientId = savedDocument.clientId.toString(),
                 title = savedDocument.title,
-                content = savedDocument.content
+                content = savedDocument.content,
+                createdAt = savedDocument.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             )
             ResponseEntity.status(HttpStatus.CREATED).body(response)
         } catch (e: IllegalArgumentException) {
