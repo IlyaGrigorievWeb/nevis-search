@@ -1,6 +1,5 @@
 package org.nevis.search.domain.entities
 
-import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.*
 import java.time.LocalDateTime
 import java.util.UUID
@@ -12,9 +11,6 @@ data class Document(
     @GeneratedValue
     val id: UUID = UUID.randomUUID(),
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    val client_id: UUID? = null,
-
     @Column(nullable = false, length = 500)
     val title: String = "",
 
@@ -24,9 +20,16 @@ data class Document(
     //Meta data
 
     @Column(columnDefinition = "vector(1536)")
+    @Transient
     val embedding: FloatArray? = null,
 
     @Column(name = "created_at")
-    val createdAt: LocalDateTime = LocalDateTime.now()
+    val createdAt: LocalDateTime = LocalDateTime.now(),
+
+    @Column(name = "client_id", nullable = false, columnDefinition = "UUID")
+    val clientId: UUID? = null,
+
+    @Column(columnDefinition = "TEXT")
+    val summary: String? = null,
 )
 

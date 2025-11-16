@@ -20,7 +20,7 @@ data class Client(
     @Column(nullable = false)
     val last_name: String= "",
 
-    @Column(nullable = true)
+    @Column(name = "country_of_residence", nullable = true)
     val countryOfResidence: String? = null,
 
     //Meta data

@@ -8,7 +8,8 @@ CREATE TABLE clients (
     email VARCHAR(255) UNIQUE NOT NULL,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    country_of_residence VARCHAR(255)
 );
 
 -- Full-text search indexes
@@ -25,7 +26,8 @@ CREATE TABLE documents (
     title VARCHAR(500) NOT NULL,
     content TEXT NOT NULL,
     embedding vector(1536),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    summary TEXT
 );
 
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS client_id UUID;

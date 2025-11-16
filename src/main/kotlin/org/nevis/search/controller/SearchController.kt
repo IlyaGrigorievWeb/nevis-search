@@ -45,7 +45,7 @@ class SearchController(
         ]
     )
     fun search(
-        @RequestParam("q") query: String
+        @RequestParam("q") query: String,
     ): ResponseEntity<List<*>> {
         if (query.isBlank()) {
             return ResponseEntity.badRequest().build()
@@ -54,7 +54,7 @@ class SearchController(
         return try {
             var searchRequest = SearchRequest(
                 query = query,
-                limit = 5
+                limit = 5,
             )
             val results = searchService.search(searchRequest)
 

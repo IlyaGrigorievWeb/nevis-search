@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.nevis.search.domain.entities.Client
 import org.nevis.search.domain.entities.Document
 import org.nevis.search.service.IndexingService
+import org.nevis.search.service.SummarizingService
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -24,6 +25,7 @@ import java.util.UUID
 @Tag(name = "Clients", description = "Client management API")
 class ClientsController(
     private val indexingService: IndexingService,
+    private val summarizingService: SummarizingService
 ) {
 
     @PostMapping(
@@ -117,15 +119,15 @@ class ClientsController(
             var newDocument = Document(
                 title = request.title,
                 content = request.content,
-                client_id = UUID.fromString(id)
+                clientId = UUID.fromString(id)
             )
             indexingService.indexDocument(newDocument)
+            summarizingService.summarizeDocumentAsync(newDocument.id)
             val response = DocumentResponse(
                 id = newDocument.id.toString(),
-                client_id = newDocument.client_id.toString(),
+                clientId = newDocument.clientId.toString(),
                 title = newDocument.title,
-                content = newDocument.content,
-                created_at = newDocument.createdAt
+                content = newDocument.content
             )
             ResponseEntity.status(HttpStatus.CREATED).body(response)
         } catch (e: Exception) {

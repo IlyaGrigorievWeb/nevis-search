@@ -4,8 +4,7 @@ import java.time.LocalDateTime
 
 data class DocumentResponse(
     val id: String,
-    val client_id: String,
+    val clientId: String,
     val title: String,
-    val content: String,
-    val created_at: LocalDateTime
+    val content: String
 )

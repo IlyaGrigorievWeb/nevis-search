@@ -27,7 +27,7 @@ class HybridSearchServiceTest {
     private lateinit var documentRepository: DocumentRepository
 
     @Mock
-    private lateinit var embeddingService: OpenAIEmbeddingService
+    private lateinit var embeddingService: OpenAIService
 
     @InjectMocks
     private lateinit var hybridSearchService: HybridSearchService
@@ -59,13 +59,13 @@ class HybridSearchServiceTest {
             clientId1, "john.doe@example.com", "John", "Doe", "USA", 0.85
         )
         val fulltextResult1 = TestDataFactory.createFulltextResult(
-            clientId1, "john.doe@example.com", "John", "Doe", "USA", convertScoreToRank(0.75) // TODO problem with rank scoring
+            clientId1, "john.doe@example.com", "John", "Doe", "USA", 0.75
         )
         val trigramResult2 = TestDataFactory.createTrigramResult(
             clientId2, "jane.smith@example.com", "Jane", "Smith", "UK", 0.70
         )
         val fulltextResult3 = TestDataFactory.createFulltextResult(
-            clientId3, "johnny.walker@example.com", "Johnny", "Walker", "Canada", convertScoreToRank(0.65)  // TODO problem with rank scoring
+            clientId3, "johnny.walker@example.com", "Johnny", "Walker", "Canada", 0.65
         )
 
         setupMocks(

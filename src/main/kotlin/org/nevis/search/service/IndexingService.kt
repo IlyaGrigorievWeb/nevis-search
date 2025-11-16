@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service
 class IndexingService(
     private val clientRepository: ClientRepository,
     private val documentRepository: DocumentRepository,
-    private val embeddingService: OpenAIEmbeddingService
+    private val embeddingService: OpenAIService
 ) {
 
     /**
